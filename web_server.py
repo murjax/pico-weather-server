@@ -57,27 +57,35 @@ def update_screen(temperature, humidity):
     tft.text((40, 70), humidity, TFT.YELLOW, sysfont, 2, nowrap=True)
 
 def webpage(temperature, humidity, state):
-    html = f"""
-            <!DOCTYPE html>
-            <html>
-            <form action="./lighton">
-            <input type="submit" value="Light on" />
-            </form>
-            <form action="./lightoff">
-            <input type="submit" value="Light off" />
-            </form>
-            <p>LED is {state}</p>
-            <p>Temperature is {temperature}</p>
-            <p>Humidity is {humidity}</p>
-            </body>
-            </html>
-    """
-    return str(html)
+    with open('template.html', 'r') as file:
+        template = file.read()
+
+    html = template.format(
+        temperature = temperature,
+        humidity = humidity,
+        state = state
+    )
+
+    return html
+
+def serve_file(client, file_name, content_type):
+    with open(file_name, 'rb') as file:
+        content = file.read()
+
+    headers = f"HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\n\r\n"
+    client.send(headers.encode())
+    client.sendall(content)
+
+def serve_page(client, state):
+    (temperature, humidity) = get_reading()
+    update_screen(temperature, humidity)
+    html = webpage(temperature, humidity, state)
+    client.send(html)
 
 def serve(connection):
     state = 'OFF'
     pico_led.off()
-    temperature = 0
+
     while True:
         client = connection.accept()[0]
         request = client.recv(1024)
@@ -87,22 +95,24 @@ def serve(connection):
             request = request.split()[1]
         except IndexError:
             pass
-        if request == '/lighton?':
-            pico_led.on()
-            state = 'ON'
-        elif request =='/lightoff?':
-            pico_led.off()
-            state = 'OFF'
 
         print(request)
 
-        (temperature, humidity) = get_reading()
+        if request == '/':
+            serve_page(client, state)
+        elif request == '/lighton?':
+            pico_led.on()
+            state = 'ON'
+            serve_page(client, state)
+        elif request =='/lightoff?':
+            pico_led.off()
+            state = 'OFF'
+            serve_page(client, state)
+        elif request.endswith('.js'):
+            print('serving js file')
+            print(request[1:])
+            serve_file(client, request[1:], 'application/javascript')
 
-        if (request != '/favicon.ico'):
-            update_screen(temperature, humidity)
-
-        html = webpage(temperature, humidity, state)
-        client.send(html)
         client.close()
 
 try:
