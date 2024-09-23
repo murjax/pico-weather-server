@@ -1,5 +1,6 @@
 import network
 from time import sleep
+import json
 from picozero import pico_led
 import machine
 import dht
@@ -8,6 +9,7 @@ from sysfont import sysfont
 
 import asyncio
 from microdot import Microdot, send_file
+from websocket import with_websocket
 
 ssid = 'SSID'
 password = 'PASSWORD'
@@ -107,21 +109,21 @@ async def lighton(request):
 async def index(request):
     return send_file('app.js')
 
+@app.route('/info')
+@with_websocket
+async def info(request, ws):
+    while True:
+        reading_data = {
+            "temperature": temperature,
+            "humidity": humidity
+        }
+        json_reading = json.dumps(reading_data)
+        await ws.send(json_reading)
+        sleep(5)
+
 async def main():
-    # start the server in a background task
     server = asyncio.create_task(app.start_server(port=80))
-
     asyncio.create_task(update_reading())
-    # ... do other asynchronous work here ...
-
-    # cleanup before ending the application
     await server
 
 asyncio.run(main())
-
-# while True:
-#     global temperature
-#     global humidity
-#     (temperature, humidity) = get_reading()
-#     update_screen()
-#     sleep(10)
