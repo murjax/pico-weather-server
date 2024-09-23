@@ -20,6 +20,7 @@ def connect():
     wlan.active(True)
     wlan.connect(ssid, password)
     while wlan.isconnected() == False:
+        print(wlan.status)
         print('Waiting for connection')
         sleep(1)
 
@@ -56,14 +57,14 @@ def update_screen(temperature, humidity):
     tft.text((40, 50), temperature, TFT.YELLOW, sysfont, 2, nowrap=True)
     tft.text((40, 70), humidity, TFT.YELLOW, sysfont, 2, nowrap=True)
 
-def webpage(temperature, humidity, state):
+def webpage(temperature, humidity, led_state):
     with open('template.html', 'r') as file:
         template = file.read()
 
     html = template.format(
         temperature = temperature,
         humidity = humidity,
-        state = state
+        led_state = led_state
     )
 
     return html
@@ -76,14 +77,14 @@ def serve_file(client, file_name, content_type):
     client.send(headers.encode())
     client.sendall(content)
 
-def serve_page(client, state):
+def serve_page(client, led_state):
     (temperature, humidity) = get_reading()
     update_screen(temperature, humidity)
-    html = webpage(temperature, humidity, state)
+    html = webpage(temperature, humidity, led_state)
     client.send(html)
 
 def serve(connection):
-    state = 'OFF'
+    led_state = 'OFF'
     pico_led.off()
 
     while True:
@@ -98,20 +99,17 @@ def serve(connection):
 
         print(request)
 
-        if request == '/':
-            serve_page(client, state)
-        elif request == '/lighton?':
-            pico_led.on()
-            state = 'ON'
-            serve_page(client, state)
-        elif request =='/lightoff?':
-            pico_led.off()
-            state = 'OFF'
-            serve_page(client, state)
-        elif request.endswith('.js'):
-            print('serving js file')
-            print(request[1:])
+        if request.endswith('.js'):
             serve_file(client, request[1:], 'application/javascript')
+        else:
+            if request == '/lighton?':
+                pico_led.on()
+                led_state = 'ON'
+            elif request == '/lightoff?':
+                pico_led.off()
+                led_state = 'OFF'
+
+            serve_page(client, led_state)
 
         client.close()
 
